@@ -15,7 +15,8 @@
 ### The application endpoints should be reachable from the public internet once deployed.
 * Need inbound routes to the app, server is being hosted on port 8080
 * Healthcheck on `/`, with 10% chance to fail. If we run in ECS, this could lead to regular container restarts of the container.
-    * Do we want additional monitoring and alerting?
+    * Do we want additional monitoring and alerting? Setup simple logging for now.
+    * Maybe change which route to run the healthcheck on? I think this is just here to make sure self healing is a part of the solution.
 * "External check" on `/external-check` to see if outbound traffic is open. Will need to keep the outbound SG open for this, and route out through an internet gateway.
 
 ### Infrastructure and application configuration should follow appropriate security best practices.
@@ -42,11 +43,33 @@
 
 **Decision: Cloudfront & ALB for routing traffic.**
 
-* Ideally, container instances would be in private subnet, but that requires paying for a NAT to route traffic back out to the internet (not free).
-* Can run in public subnets, but increases need for SGs to be configured precisely
+* Ideally, containers would be in private subnet, but that requires paying for a NAT to route traffic back out to the internet (not free).
+* Can run in public subnets, but increases need for SGs to be configured precisely. Also incurs a cost on assigning public IP addresses.
 
 ## Implementation
 
 Going to write this in Pulumi directly, given the parallels to Terraform. 
 
 Started by getting everything installed and configured for my AWS account, then found and used the `pulumi new container-aws-python` as a starting point. This gave me a simple ECR repo and Fargate service fronted by an ALB. However, it defines its own Dockerfile and also doesn't handle Cloudfront for securing the inbound connection behind HTTPS.
+
+Considered defining VPC related resources (e.g. Subnets, route tables and internet gateway). Decided against it, the default is sufficient here.
+
+Updated the template to use the test Dockerfile. Planned the Pulumi changes. Adjusted resource names. Added global tags.
+
+Read into the AWSx provider, that wraps around the standard AWS provider. Looks like it handles what I need nicely.
+
+Attempted initial deployment. Failed to connect to my Docker daemon for the image, but the rest of the stack created successfully.
+
+Fixed docker installation with WSL.
+
+Stack failed to deploy due to host & container port mapping mismatch. Fixed that, now the target group needs updating to route port 80 -> 8080.
+
+This can't be done using the FargateService resource directly, going to need to define the LB/TG myself and pass that in.
+
+That worked nicely, now to setup cloudfront for https. This requires full control over the ALB & TG, so moved that off of AWSx provider to the raw AWS one.
+
+Done. Learned about a security pattern for cloudfront distributions along the way. https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/restrict-access-to-load-balancer.html
+
+Basically, traffic is currently permitted to the load balancer via ANY cloudfront distribution, so by adding this rotating header to our one, we can ensure traffic only gets to the ALB via the Cloudfron distro we want. Adding this in next, before wrapping up the test. This adds the need to set a secret in the pulumi config before applying. This could be set and pulled from secrets manager.
+
+Removed leftover unusued resources from earlier in.
