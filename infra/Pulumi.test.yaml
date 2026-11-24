@@ -1,5 +1,8 @@
 config:
   aws:region: eu-west-1
+  aws:defaultTags:
+    tags:
+      Service: zuno-assessment
   zuno-devops-assessment:containerPort: "8080"
   zuno-devops-assessment:cpu: "512"
   zuno-devops-assessment:memory: "128"
