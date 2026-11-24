@@ -73,3 +73,13 @@ Done. Learned about a security pattern for cloudfront distributions along the wa
 Basically, traffic is currently permitted to the load balancer via ANY cloudfront distribution, so by adding this rotating header to our one, we can ensure traffic only gets to the ALB via the Cloudfron distro we want. Adding this in next, before wrapping up the test. This adds the need to set a secret in the pulumi config before applying. This could be set and pulled from secrets manager.
 
 Removed leftover unusued resources from earlier in.
+
+Before finishing, I'm considering changing the health check. The default requires 3 failures in a row to kill a task. That's a 0.1% chance each group of three health checks. Checking with AI, each task will currently survive, on average, 4.6 hours.
+
+Also realised the secret I've created won't be able to be decrypted by the team wanting to run this deployment. Will generate this in code instead.
+
+## Areas for future improvement
+
+* Resiliency. Given it's a simple web server, we could spin up more containers to avoid downtime when one fails a health check. In addition, we would distribute these across AZ's, giving resiliency to an AZ failure. We could go further with regional scaling, but that would require more re-architecting via additional load balancers.
+* Image building. Currently, it builds on every `pulumi up`, which is fine for a test, but if this were a real application, then we would want CI/CD to manage running application building & testing prior to deployment.
+* Image scanning. Part of that CI pipeline should scan the docker image for vulnerabilities, but we could also enable ECR enhanced scanning if we wished.
