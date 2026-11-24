@@ -6,3 +6,5 @@ config:
   zuno-devops-assessment:containerPort: "8080"
   zuno-devops-assessment:cpu: "512"
   zuno-devops-assessment:memory: "128"
+  zuno-devops-assessment:originVerifySecret:
+    secure: AAABAOmxwBRxIKEWEgblqz+LoS59/Li3Lkl83c3tb4Hyt0t7tkPaipDv/jcW4hy9ZHndLDRRZ9MfynbFVkGos5KfTFhbOy4qhiO/vc+pZnt4WyIrzpLRTyBGmMN+6AsE

@@ -6,7 +6,12 @@ config = Config()
 container_port = config.get_int("containerPort", 80)
 cpu = config.get_int("cpu", 512)
 memory = config.get_int("memory", 128)
-
+ 
+# Shared secret CloudFront sends to the ALB so direct-to-ALB requests can be rejected.
+# Set with: pulumi config set --secret originVerifySecret "$(openssl rand -hex 32)"
+origin_verify_secret = config.require_secret("originVerifySecret")
+origin_verify_header = "X-Origin-Verify"
+ 
 # Default VPC: public subnets in every AZ with an internet gateway already attached
 vpc = awsx.ec2.DefaultVpc("default-vpc")
  
@@ -61,7 +66,7 @@ aws.vpc.SecurityGroupEgressRule(
     to_port=443,
     cidr_ipv4="0.0.0.0/0",
 )
-
+ 
 # --- Load balancer ---------------------------------------------------------
  
 alb = aws.lb.LoadBalancer(
@@ -94,9 +99,33 @@ listener = aws.lb.Listener(
     load_balancer_arn=alb.arn,
     port=80,
     protocol="HTTP",
-    default_actions=[{"type": "forward", "target_group_arn": target_group.arn}],
+    default_actions=[
+        {
+            "type": "fixed-response",
+            "fixed_response": {
+                "content_type": "text/plain",
+                "message_body": "Forbidden",
+                "status_code": "403",
+            },
+        }
+    ],
 )
-
+ 
+aws.lb.ListenerRule(
+    "forward-from-cloudfront",
+    listener_arn=listener.arn,
+    priority=1,
+    conditions=[
+        {
+            "http_header": {
+                "http_header_name": origin_verify_header,
+                "values": [origin_verify_secret],
+            }
+        }
+    ],
+    actions=[{"type": "forward", "target_group_arn": target_group.arn}],
+)
+ 
 # --- CloudFront ------------------------------------------------------------
  
 caching_disabled = aws.cloudfront.get_cache_policy(name="Managed-CachingDisabled")
@@ -120,6 +149,9 @@ cdn = aws.cloudfront.Distribution(
                 "origin_protocol_policy": "http-only",  # ALB has no certificate
                 "origin_ssl_protocols": ["TLSv1.2"],
             },
+            "custom_headers": [
+                {"name": origin_verify_header, "value": origin_verify_secret}
+            ],
         }
     ],
     default_cache_behavior={
