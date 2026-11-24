@@ -62,6 +62,84 @@ aws.vpc.SecurityGroupEgressRule(
     cidr_ipv4="0.0.0.0/0",
 )
 
+# --- Load balancer ---------------------------------------------------------
+ 
+alb = aws.lb.LoadBalancer(
+    "alb",
+    load_balancer_type="application",
+    subnets=vpc.public_subnet_ids,
+    security_groups=[alb_sg.id],
+    drop_invalid_header_fields=True,
+)
+ 
+target_group = aws.lb.TargetGroup(
+    "app-tg",
+    vpc_id=vpc.vpc_id,
+    port=container_port,
+    protocol="HTTP",
+    target_type="ip",  # required for Fargate (awsvpc networking)
+    deregistration_delay=30,
+    health_check={
+        "path": "/",
+        "port": "traffic-port",
+        "matcher": "200",
+        "interval": 15,
+        "healthy_threshold": 2,
+        "unhealthy_threshold": 3,
+    },
+)
+ 
+listener = aws.lb.Listener(
+    "http",
+    load_balancer_arn=alb.arn,
+    port=80,
+    protocol="HTTP",
+    default_actions=[{"type": "forward", "target_group_arn": target_group.arn}],
+)
+
+# --- CloudFront ------------------------------------------------------------
+ 
+caching_disabled = aws.cloudfront.get_cache_policy(name="Managed-CachingDisabled")
+all_viewer_except_host = aws.cloudfront.get_origin_request_policy(
+    name="Managed-AllViewerExceptHostHeader"
+)
+ 
+cdn = aws.cloudfront.Distribution(
+    "cdn",
+    enabled=True,
+    comment="Zuno assessment web server",
+    price_class="PriceClass_100",  # North America + Europe edges only
+    http_version="http2and3",
+    origins=[
+        {
+            "origin_id": "alb",
+            "domain_name": alb.dns_name,
+            "custom_origin_config": {
+                "http_port": 80,
+                "https_port": 443,
+                "origin_protocol_policy": "http-only",  # ALB has no certificate
+                "origin_ssl_protocols": ["TLSv1.2"],
+            },
+        }
+    ],
+    default_cache_behavior={
+        "target_origin_id": "alb",
+        "viewer_protocol_policy": "redirect-to-https",
+        "allowed_methods": ["GET", "HEAD", "OPTIONS"],
+        "cached_methods": ["GET", "HEAD"],
+        "cache_policy_id": caching_disabled.id,
+        "origin_request_policy_id": all_viewer_except_host.id,
+        "compress": True,
+    },
+    # Don't cache errors: the app's random 500s should reach the viewer as they happen
+    custom_error_responses=[
+        {"error_code": code, "error_caching_min_ttl": 0}
+        for code in (500, 502, 503, 504)
+    ],
+    restrictions={"geo_restriction": {"restriction_type": "none"}},
+    viewer_certificate={"cloudfront_default_certificate": True},
+)
+
 # An ECS cluster to deploy into
 cluster = aws.ecs.Cluster("cluster")
 
@@ -119,15 +197,15 @@ service = awsx.ecs.FargateService(
                     "container_port": container_port,
                     "host_port": container_port,
                     "protocol": "tcp",
-                    "target_group": loadbalancer.default_target_group,
+                    "target_group": target_group,
                 }
             ],
         },
     },
 )
 
-# The URL at which the container's HTTP endpoint will be available
-export("url", Output.concat("http://", loadbalancer.load_balancer.dns_name))
+# Public HTTPS endpoint
+export("url", Output.concat("https://", cdn.domain_name))
 
 # The name of the ECS cluster
 export("clusterName", cluster.name)
