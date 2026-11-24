@@ -14,7 +14,7 @@ cluster = aws.ecs.Cluster("cluster")
 loadbalancer = awsx.lb.ApplicationLoadBalancer("loadbalancer")
 
 # An ECR repository to store the application's container image
-repo = awsx.ecr.Repository("repo", force_delete=True)
+repo = awsx.ecr.Repository("zuno-web-server", force_delete=True, image_tag_mutability="IMMUTABLE")
 
 # Build and publish the application's container image from ./app to the ECR repository
 image = awsx.ecr.Image(
