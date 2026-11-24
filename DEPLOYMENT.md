@@ -2,6 +2,10 @@
 
 The infrastructure is defined with [Pulumi](https://www.pulumi.com/) (Python) in `infra/`. A single `pulumi up` builds the container image, pushes it to ECR and deploys the full stack.
 
+## Decisions
+
+A breakdown of my thought process, decisions made and areas for future improvement can be found in [decisions.md](./decisions.md)
+
 ## What gets created
 
 - **CloudFront distribution**: the public HTTPS endpoint (default `*.cloudfront.net` certificate, caching disabled)
