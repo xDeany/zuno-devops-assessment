@@ -44,3 +44,9 @@
 
 * Ideally, container instances would be in private subnet, but that requires paying for a NAT to route traffic back out to the internet (not free).
 * Can run in public subnets, but increases need for SGs to be configured precisely
+
+## Implementation
+
+Going to write this in Pulumi directly, given the parallels to Terraform. 
+
+Started by getting everything installed and configured for my AWS account, then found and used the `pulumi new container-aws-python` as a starting point. This gave me a simple ECR repo and Fargate service fronted by an ALB. However, it defines its own Dockerfile and also doesn't handle Cloudfront for securing the inbound connection behind HTTPS.
