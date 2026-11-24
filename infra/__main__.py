@@ -1,7 +1,7 @@
 from pulumi import Config, Output, export
 import pulumi_aws as aws
 import pulumi_awsx as awsx
-
+ 
 config = Config()
 container_port = config.get_int("containerPort", 80)
 cpu = config.get_int("cpu", 512)
@@ -139,41 +139,16 @@ cdn = aws.cloudfront.Distribution(
     restrictions={"geo_restriction": {"restriction_type": "none"}},
     viewer_certificate={"cloudfront_default_certificate": True},
 )
-
+ 
 # An ECS cluster to deploy into
 cluster = aws.ecs.Cluster("cluster")
-
-# An ALB to serve the container endpoint to the internet
-loadbalancer = awsx.lb.ApplicationLoadBalancer("loadbalancer")
-
+ 
 # An ECR repository to store the application's container image
 repo = awsx.ecr.Repository("zuno-web-server", force_delete=True, image_tag_mutability="IMMUTABLE")
-
+ 
 # Build and publish the application's container image from ./app to the ECR repository
 image = awsx.ecr.Image(
     "image", repository_url=repo.url, context="../", platform="linux/amd64"
-)
- 
-# ALB listens on 80 and forwards to the tasks on the container port
-loadbalancer = awsx.lb.ApplicationLoadBalancer(
-    "loadbalancer2",
-    subnet_ids=vpc.public_subnet_ids,
-    security_groups=[alb_sg.id],
-    listener={"port": 80, "protocol": "HTTP"},
-    default_target_group={
-        "vpc_id": vpc.vpc_id,
-        "port": container_port,
-        "protocol": "HTTP",
-        "target_type": "ip",
-        "health_check": {
-            "path": "/",
-            "port": "traffic-port",
-            "matcher": "200",
-            "interval": 15,
-            "healthy_threshold": 2,
-            "unhealthy_threshold": 3,
-        },
-    },
 )
 
 # Deploy an ECS Service on Fargate to host the application container
@@ -203,9 +178,10 @@ service = awsx.ecs.FargateService(
         },
     },
 )
-
+ 
 # Public HTTPS endpoint
 export("url", Output.concat("https://", cdn.domain_name))
-
+ 
 # The name of the ECS cluster
 export("clusterName", cluster.name)
+ 
