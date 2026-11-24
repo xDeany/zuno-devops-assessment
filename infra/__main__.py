@@ -1,6 +1,7 @@
 from pulumi import Config, Output, export
 import pulumi_aws as aws
 import pulumi_awsx as awsx
+import pulumi_random as random
  
 config = Config()
 container_port = config.get_int("containerPort", 80)
@@ -8,8 +9,9 @@ cpu = config.get_int("cpu", 512)
 memory = config.get_int("memory", 128)
  
 # Shared secret CloudFront sends to the ALB so direct-to-ALB requests can be rejected.
-# Set with: pulumi config set --secret originVerifySecret "$(openssl rand -hex 32)"
-origin_verify_secret = config.require_secret("originVerifySecret")
+origin_verify_secret = random.RandomPassword(
+    "origin-verify-secret", length=32, special=False
+).result
 origin_verify_header = "X-Origin-Verify"
  
 # Default VPC: public subnets in every AZ with an internet gateway already attached
