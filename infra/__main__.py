@@ -18,7 +18,7 @@ repo = awsx.ecr.Repository("zuno-web-server", force_delete=True, image_tag_mutab
 
 # Build and publish the application's container image from ./app to the ECR repository
 image = awsx.ecr.Image(
-    "image", repository_url=repo.url, context="./app", platform="linux/amd64"
+    "image", repository_url=repo.url, context="../", platform="linux/amd64"
 )
 
 # Deploy an ECS Service on Fargate to host the application container
